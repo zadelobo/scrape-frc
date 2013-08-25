@@ -9,7 +9,7 @@ import (
 )
 
 type Team struct {
-  teamNumber, teamID string
+  state, city, teamName, teamID, teamNumber string
 }
 
 func getNumberOfPages() (num int, err error) {
@@ -35,11 +35,11 @@ func getTeams(url string, c chan<- []Team) {
   if err != nil {
     // Handle error
   }
-  re, _ := regexp.Compile(`<a href="/whats-going-on/team/FRC/([\d]+?)\">([\d]+?)</a>`)
+  re, _ := regexp.Compile(`<tr class="(even|odd)"><td>US</td><td>([\w\s]+?)</td><td>([\w\s]+?)</td><td>([\w\s]+?)</td><td><a href="/whats-going-on/team/FRC/([\d]+?)\">([\d]+?)</a>`)
   res := re.FindAllStringSubmatch(string(contents), -1)
   teams := make([]Team, 0)
   for _, teamMatch := range res {
-    t := Team{teamMatch[2], teamMatch[1]}
+    t := Team{teamMatch[2], teamMatch[3], teamMatch[4], teamMatch[5], teamMatch[6]}
     teams = append(teams, t)
   }
   c <-teams
@@ -62,6 +62,8 @@ func main() {
   }
   for i := n; i > 0; i-- {
     n := <-c
-    fmt.Println(n)
+    for _, team := range n {
+      fmt.Println(team)
+    }
   }
 }
