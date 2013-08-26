@@ -60,9 +60,11 @@ func main() {
     go getTeams(url, c)
     n++
   }
+  urlArray := make(map[string] string)
   for i := n; i > 0; i-- {
     n := <-c
     for _, team := range n {
+      append(urlArray, "")
       fmt.Println(team)
     }
   }
