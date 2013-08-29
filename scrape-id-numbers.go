@@ -74,26 +74,29 @@ func main() {
   // Do a call to get a list of all of the teams (2013)
   c1 := make(chan []Team)
   c2 := make(chan WLT)
-  n := 0
+  n1 := 0
   // Check how many teams to get
   numPages, err := getNumberOfPages()
   if err != nil {
     return
   }
+  fmt.Println(numPages)
   for i := 0; i <= numPages; i++ {
     url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/teams?page=%d&ProgramCode=FRC&Season=2013&Country=USA&sort=asc&order=Team%%20Number", i)
     go getTeams(url, c1)
-    n++
+    n1++
   }
+  n2 := 0
   // urlArray := make(map[string] string)
-  for i := n; i > 0; i-- {
+  for i := n1; i > 0; i-- {
     tt := <-c1
     for _, team := range tt {
       go getWLT(team.teamNumber, c2)
+      n2++
     }
+    fmt.Println(i)
   }
-  fmt.Println(n)
-  for i := n; i > 0; i-- {
+  for i := n2; i > 0; i-- {
     fmt.Println(<-c2)
   }
 }
