@@ -13,6 +13,12 @@ type Team struct {
   state, city, teamName, teamID, teamNumber string
 }
 
+type PageRequest struct {
+  numPages int
+  country string
+  err error
+}
+
 type WLT struct {
   teamNumber, w, l, t string
 }
@@ -30,19 +36,20 @@ func getPageContent(url string) (response string, err error) {
   return string(contents), nil
 }
 
-func getNumberOfPages(country string) (num int, err error) {
+func getNumberOfPages(country string, returnChannel chan<- *PageRequest) {
   url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/teams?page=0&ProgramCode=FRC&Season=2013&Country=%s&sort=asc&order=Team%%20Number", country)
   contents, err := getPageContent(url)
   if err != nil {
-    return 0, err
+    returnChannel<- &PageRequest{0, "", err}
+    return
   }
   re, _ := regexp.Compile(`<a title="Go to last page" href="/whats-going-on/teams\?page=([\d]+?)&amp`)
   res := re.FindStringSubmatch(contents)
-  num = 0
+  num := 0
   if len(res) > 0 {
     num, _ = strconv.Atoi(res[1])
   }
-  return num, nil
+  returnChannel<- &PageRequest{num, country, nil}
 }
 
 func getTeams(url string, c chan<- []Team) {
@@ -60,7 +67,7 @@ func getTeams(url string, c chan<- []Team) {
   c <-teams
 }
 
-func getWLT(teamNumber string, c chan<- WLT) {
+func getOverallWLT(teamNumber string, c chan<- WLT) {
   url := fmt.Sprintf("http://www.thebluealliance.com/team/%s/2013", teamNumber)
   contents, err := getPageContent(url)
   if err != nil {
@@ -68,7 +75,6 @@ func getWLT(teamNumber string, c chan<- WLT) {
   }
   re, _ := regexp.Compile(`<strong>([\d]{1,2})-([\d]{1,2})-([\d]{1,2})</strong>`)
   res := re.FindAllStringSubmatch(string(contents), -1)
-  fmt.Println(res)
   if len(res) > 0 {
     wlt := WLT{teamNumber, res[0][1], res[0][2], res[0][3]}
     c <-wlt
@@ -104,30 +110,37 @@ func main() {
   if err != nil {
     return
   }
+
+  pageRequestChannel := make(chan *PageRequest)
+  pageRequests := 0
   for _, country := range countries {
-    fmt.Println(country)
-    numPages, err := getNumberOfPages(country)
-    if err != nil {
-      continue
+    go getNumberOfPages(country, pageRequestChannel)
+    pageRequests++
+  }
+  
+  for i := pageRequests; i > 0; i-- {
+    pageReq := <-pageRequestChannel
+    fmt.Println(pageReq.country)
+    if err := pageReq.err; err != nil {
+      fmt.Println("Error!")
+      fmt.Println(err)
     }
-    fmt.Println(numPages)
-    for i := 0; i <= numPages; i++ {
-      url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/teams?page=%d&ProgramCode=FRC&Season=2013&Country=%s&sort=asc&order=Team%%20Number", i, country)
+    for i := 0; i <= pageReq.numPages; i++ {
+      url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/teams?page=%d&ProgramCode=FRC&Season=2013&Country=%s&sort=asc&order=Team%%20Number", i, pageReq.country)
       go getTeams(url, c1)
       n1++
     }
   }
+
   n2 := 0
   // urlArray := make(map[string] string)
   for i := n1; i > 0; i-- {
     tt := <-c1
     for _, team := range tt {
-      go getWLT(team.teamNumber, c2)
+      go getOverallWLT(team.teamNumber, c2)
       n2++
     }
-    fmt.Println(i)
   }
-  fmt.Println(n2)
   for i := n2; i > 0; i-- {
     fmt.Println(<-c2)
   }
