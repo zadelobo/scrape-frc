@@ -102,46 +102,46 @@ func getCountries() (countryArray []string, err error) {
 
 func main() {
   // Do a call to get a list of all of the teams (2013)
-  c1 := make(chan []Team)
-  c2 := make(chan WLT)
+  teamChannel := make(chan []Team)
   n1 := 0
-  // Check how many teams to get
+
   countries, err := getCountries()
   if err != nil {
     return
   }
 
   pageRequestChannel := make(chan *PageRequest)
-  pageRequests := 0
+
   for _, country := range countries {
     go getNumberOfPages(country, pageRequestChannel)
-    pageRequests++
   }
   
-  for i := pageRequests; i > 0; i-- {
+  for i := len(countries); i > 0; i-- {
     pageReq := <-pageRequestChannel
-    fmt.Println(pageReq.country)
     if err := pageReq.err; err != nil {
       fmt.Println("Error!")
       fmt.Println(err)
+      continue
     }
     for i := 0; i <= pageReq.numPages; i++ {
       url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/teams?page=%d&ProgramCode=FRC&Season=2013&Country=%s&sort=asc&order=Team%%20Number", i, pageReq.country)
-      go getTeams(url, c1)
+      go getTeams(url, teamChannel)
       n1++
     }
   }
 
+  wltChannel := make(chan WLT)
   n2 := 0
   // urlArray := make(map[string] string)
   for i := n1; i > 0; i-- {
-    tt := <-c1
+    fmt.Println(i)
+    tt := <-teamChannel
     for _, team := range tt {
-      go getOverallWLT(team.teamNumber, c2)
+      go getOverallWLT(team.teamNumber, wltChannel)
       n2++
     }
   }
   for i := n2; i > 0; i-- {
-    fmt.Println(<-c2)
+    fmt.Println(<-wltChannel)
   }
 }
