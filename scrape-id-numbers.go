@@ -19,6 +19,10 @@ type PageRequest struct {
   err error
 }
 
+type Award struct {
+  year, event, award string
+}
+
 type WLT struct {
   teamNumber, w, l, t string
 }
@@ -36,6 +40,19 @@ func getPageContent(url string) (response string, err error) {
   return string(contents), nil
 }
 
+func getAwards(team string) (a string, err error) {
+  url := fmt.Sprintf("http://www.thebluealliance.com/team/%s/history", team)
+  response, err := getPageContent(url)
+  if err != nil {
+    return "", err
+  }
+
+  re, _ := regexp.Compile(`<table(.*?)</table>`)
+  res := re.FindAllStringSubmatch(response, -1)
+  fmt.Println(res)
+  return "", nil
+}
+
 func getNumberOfPages(country string, returnChannel chan<- *PageRequest) {
   url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/teams?page=0&ProgramCode=FRC&Season=2013&Country=%s&sort=asc&order=Team%%20Number", country)
   contents, err := getPageContent(url)
@@ -43,6 +60,7 @@ func getNumberOfPages(country string, returnChannel chan<- *PageRequest) {
     returnChannel<- &PageRequest{0, "", err}
     return
   }
+
   re, _ := regexp.Compile(`<a title="Go to last page" href="/whats-going-on/teams\?page=([\d]+?)&amp`)
   res := re.FindStringSubmatch(contents)
   num := 0
@@ -101,6 +119,12 @@ func getCountries() (countryArray []string, err error) {
 }
 
 func main() {
+  a, _ := getAwards("2337")
+  if a != "" {
+    fmt.Println("No")
+  }
+  return
+
   // Do a call to get a list of all of the teams (2013)
   teamChannel := make(chan []Team)
   n1 := 0
