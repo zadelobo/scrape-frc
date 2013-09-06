@@ -115,6 +115,7 @@ func getCountries() (countryArray []string, err error) {
     c := strings.Replace(country[1], " ", "+", -1)
     countryArray = append(countryArray, c)
   }
+
   return countryArray, nil
 }
 
