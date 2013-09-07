@@ -8,15 +8,9 @@ import (
   "strconv"
   "strings"
   "labix.org/v2/mgo"
-  "labix.org/v2/mgo/bson"
+  // "labix.org/v2/mgo/bson"
   "os"
 )
-
-type msg struct {
-  Id    bson.ObjectId `bson:"_id"`
-  Msg   string        `bson:"msg"`
-  Count int           `bson:"count"`
-}
 
 type Team struct {
   state, city, teamName, teamID, teamNumber string
@@ -29,7 +23,8 @@ type PageRequest struct {
 }
 
 type Award struct {
-  year, event, award string
+  team Team
+  year, eventID, event, award string
 }
 
 type WLT struct {
@@ -49,17 +44,28 @@ func getPageContent(url string) (response string, err error) {
   return string(contents), nil
 }
 
-func getAwards(team string) (a string, err error) {
-  url := fmt.Sprintf("http://www.thebluealliance.com/team/%s/history", team)
+func getAwards(team Team, returnChannel chan<- []Award) {
+  url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/team/FRC/%s", team.teamID)
   response, err := getPageContent(url)
   if err != nil {
-    return "", err
+    returnChannel<- nil
+    return
   }
 
-  re, _ := regexp.Compile(`<table(.*?)</table>`)
+  awardArray := make([]Award, 0)
+
+  re, _ := regexp.Compile(`<tr(?s)(.*?)</tr>`)
   res := re.FindAllStringSubmatch(response, -1)
-  fmt.Println(res)
-  return "", nil
+  for _, awardRow := range res[1:] {
+    re, _ = regexp.Compile(`<tr class="(?:odd|even)"><td>([\d]{4})</td><td><a href="/whats-going-on/event/(\d+)">(?:[\d]{4}) - (.*?)</a></td><td>(.*?)</td>`)
+    res = re.FindAllStringSubmatch(awardRow[0], -1)
+    awards := strings.Split(res[0][4], ", ")
+    for _, award := range awards {
+      a := Award{team, res[0][1], res[0][2], res[0][3], award}
+      awardArray = append(awardArray, a)
+    }
+  }
+  returnChannel<- awardArray
 }
 
 func getNumberOfPages(country string, returnChannel chan<- *PageRequest) {
@@ -129,9 +135,15 @@ func getCountries() (countryArray []string, err error) {
 }
 
 func main() {
-  uri := os.Getenv("FF_MONGO_URL")
-  fmt.Println(uri)
+  team2337 := Team{"Grand Blanc", "MI", "EngiNERDs", "84793", "2337"}
+
+  awardChannel := make(chan []Award)  
+
+  go getAwards(team2337, awardChannel)
+  fmt.Println(<-awardChannel)
   return
+
+  uri := os.Getenv("FF_MONGO_URL")
   if uri == "" {
     fmt.Println("no connection string provided")
     os.Exit(1)
@@ -143,12 +155,6 @@ func main() {
     os.Exit(1)
   }
   defer sess.Close()
-
-  a, _ := getAwards("2337")
-  if a != "" {
-    fmt.Println("No")
-  }
-  return
 
   // Do a call to get a list of all of the teams (2013)
   teamChannel := make(chan []Team)
