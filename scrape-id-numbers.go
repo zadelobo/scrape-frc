@@ -7,7 +7,16 @@ import (
   "regexp"
   "strconv"
   "strings"
+  "labix.org/v2/mgo"
+  "labix.org/v2/mgo/bson"
+  "os"
 )
+
+type msg struct {
+  Id    bson.ObjectId `bson:"_id"`
+  Msg   string        `bson:"msg"`
+  Count int           `bson:"count"`
+}
 
 type Team struct {
   state, city, teamName, teamID, teamNumber string
@@ -120,6 +129,21 @@ func getCountries() (countryArray []string, err error) {
 }
 
 func main() {
+  uri := os.Getenv("FF_MONGO_URL")
+  fmt.Println(uri)
+  return
+  if uri == "" {
+    fmt.Println("no connection string provided")
+    os.Exit(1)
+  }
+
+  sess, err := mgo.Dial(uri)
+  if err != nil {
+    fmt.Printf("Can't connect to mongo, go error %v\n", err)
+    os.Exit(1)
+  }
+  defer sess.Close()
+
   a, _ := getAwards("2337")
   if a != "" {
     fmt.Println("No")
