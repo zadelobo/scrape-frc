@@ -8,8 +8,8 @@ import (
   "strconv"
   "strings"
   "labix.org/v2/mgo"
-  // "labix.org/v2/mgo/bson"
   "os"
+  "runtime"
 )
 
 type Team struct {
@@ -32,6 +32,7 @@ type WLT struct {
 }
 
 func getPageContent(url string) (response string, err error) {
+  
   resp, err := http.Get(url)
   if err != nil {
     return "", err
@@ -45,6 +46,7 @@ func getPageContent(url string) (response string, err error) {
 }
 
 func getAwards(team Team, returnChannel chan<- []Award) {
+
   url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/team/FRC/%s", team.teamID)
   response, err := getPageContent(url)
   if err != nil {
@@ -69,6 +71,7 @@ func getAwards(team Team, returnChannel chan<- []Award) {
 }
 
 func getNumberOfPages(country string, returnChannel chan<- *PageRequest) {
+
   url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/teams?page=0&ProgramCode=FRC&Season=2013&Country=%s&sort=asc&order=Team%%20Number", country)
   contents, err := getPageContent(url)
   if err != nil {
@@ -86,6 +89,7 @@ func getNumberOfPages(country string, returnChannel chan<- *PageRequest) {
 }
 
 func getTeams(url string, c chan<- []Team) {
+
   contents, err := getPageContent(url)
   if err != nil {
     // Handle error
@@ -101,10 +105,11 @@ func getTeams(url string, c chan<- []Team) {
 }
 
 func getOverallWLT(teamNumber string, c chan<- WLT) {
+
   url := fmt.Sprintf("http://www.thebluealliance.com/team/%s/2013", teamNumber)
   contents, err := getPageContent(url)
   if err != nil {
-    // Handle error
+
   }
   re, _ := regexp.Compile(`<strong>([\d]{1,2})-([\d]{1,2})-([\d]{1,2})</strong>`)
   res := re.FindAllStringSubmatch(string(contents), -1)
@@ -117,6 +122,7 @@ func getOverallWLT(teamNumber string, c chan<- WLT) {
 }
 
 func getCountries() (countryArray []string, err error) {
+
   contents, err := getPageContent("http://www.usfirst.org/whats-going-on")
   if err != nil {
     return
@@ -135,6 +141,7 @@ func getCountries() (countryArray []string, err error) {
 }
 
 func main() {
+
   team2337 := Team{"Grand Blanc", "MI", "EngiNERDs", "84793", "2337"}
 
   awardChannel := make(chan []Award)  
