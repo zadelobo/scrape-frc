@@ -32,7 +32,7 @@ type WLT struct {
 }
 
 func getPageContent(url string) (response string, err error) {
-  
+
   resp, err := http.Get(url)
   if err != nil {
     return "", err
@@ -144,7 +144,7 @@ func main() {
 
   team2337 := Team{"Grand Blanc", "MI", "EngiNERDs", "84793", "2337"}
 
-  awardChannel := make(chan []Award)  
+  awardChannel := make(chan []Award, 10)  
 
   go getAwards(team2337, awardChannel)
   fmt.Println(<-awardChannel)
@@ -164,7 +164,7 @@ func main() {
   defer sess.Close()
 
   // Do a call to get a list of all of the teams (2013)
-  teamChannel := make(chan []Team)
+  teamChannel := make(chan []Team, 10)
   n1 := 0
 
   countries, err := getCountries()
@@ -172,7 +172,7 @@ func main() {
     return
   }
 
-  pageRequestChannel := make(chan *PageRequest)
+  pageRequestChannel := make(chan *PageRequest, 10)
 
   for _, country := range countries {
     go getNumberOfPages(country, pageRequestChannel)
@@ -192,7 +192,7 @@ func main() {
     }
   }
 
-  wltChannel := make(chan WLT)
+  wltChannel := make(chan WLT, 10)
   n2 := 0
   // urlArray := make(map[string] string)
   for i := n1; i > 0; i-- {
