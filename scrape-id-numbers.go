@@ -9,11 +9,14 @@ import (
   "strings"
   "labix.org/v2/mgo"
   "os"
-  "runtime"
 )
 
 type Team struct {
-  state, city, teamName, teamID, teamNumber string
+  State       string  `bson:"state"`
+  City        string  `bson:"city"`
+  TeamName    string  `bson:"teamName"`
+  TeamID      string  `bson:"teamID"`
+  TeamNumber  string  `bson:"teamNumber"`
 }
 
 type PageRequest struct {
@@ -23,8 +26,11 @@ type PageRequest struct {
 }
 
 type Award struct {
-  team Team
-  year, eventID, event, award string
+  Team    string  `bson:"team"`
+  Year    string  `bson:"year"`
+  EventID string  `bson:"eventID"`
+  Event   string  `bson:"event"`
+  Award   string  `bson:"award"`
 }
 
 type WLT struct {
@@ -47,7 +53,7 @@ func getPageContent(url string) (response string, err error) {
 
 func getAwards(team Team, returnChannel chan<- []Award) {
 
-  url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/team/FRC/%s", team.teamID)
+  url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/team/FRC/%s", team.TeamID)
   response, err := getPageContent(url)
   if err != nil {
     returnChannel<- nil
@@ -63,16 +69,16 @@ func getAwards(team Team, returnChannel chan<- []Award) {
     res = re.FindAllStringSubmatch(awardRow[0], -1)
     awards := strings.Split(res[0][4], ", ")
     for _, award := range awards {
-      a := Award{team, res[0][1], res[0][2], res[0][3], award}
+      a := Award{team.TeamNumber, res[0][1], res[0][2], res[0][3], award}
       awardArray = append(awardArray, a)
     }
   }
   returnChannel<- awardArray
 }
 
-func getNumberOfPages(country string, returnChannel chan<- *PageRequest) {
+func getNumberOfPages(country, year string, returnChannel chan<- *PageRequest) {
 
-  url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/teams?page=0&ProgramCode=FRC&Season=2013&Country=%s&sort=asc&order=Team%%20Number", country)
+  url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/teams?page=0&ProgramCode=FRC&Season=%s&Country=%s&sort=asc&order=Team%%20Number", year, country)
   contents, err := getPageContent(url)
   if err != nil {
     returnChannel<- &PageRequest{0, "", err}
@@ -104,23 +110,6 @@ func getTeams(url string, c chan<- []Team) {
   c <-teams
 }
 
-func getOverallWLT(teamNumber string, c chan<- WLT) {
-
-  url := fmt.Sprintf("http://www.thebluealliance.com/team/%s/2013", teamNumber)
-  contents, err := getPageContent(url)
-  if err != nil {
-
-  }
-  re, _ := regexp.Compile(`<strong>([\d]{1,2})-([\d]{1,2})-([\d]{1,2})</strong>`)
-  res := re.FindAllStringSubmatch(string(contents), -1)
-  if len(res) > 0 {
-    wlt := WLT{teamNumber, res[0][1], res[0][2], res[0][3]}
-    c <-wlt
-  } else {
-    c <-WLT{teamNumber, "", "", ""}
-  }
-}
-
 func getCountries() (countryArray []string, err error) {
 
   contents, err := getPageContent("http://www.usfirst.org/whats-going-on")
@@ -142,14 +131,6 @@ func getCountries() (countryArray []string, err error) {
 
 func main() {
 
-  team2337 := Team{"Grand Blanc", "MI", "EngiNERDs", "84793", "2337"}
-
-  awardChannel := make(chan []Award, 10)  
-
-  go getAwards(team2337, awardChannel)
-  fmt.Println(<-awardChannel)
-  return
-
   uri := os.Getenv("FF_MONGO_URL")
   if uri == "" {
     fmt.Println("no connection string provided")
@@ -163,47 +144,52 @@ func main() {
   }
   defer sess.Close()
 
-  // Do a call to get a list of all of the teams (2013)
-  teamChannel := make(chan []Team, 10)
-  n1 := 0
+  sess.SetSafe(&mgo.Safe{})
 
-  countries, err := getCountries()
-  if err != nil {
-    return
-  }
+  for _, year := range []string{"2013", "2012", "2011", "2010", "2009"} {
+    name := fmt.Sprintf("ff-%s", year)
+    collection := sess.DB("ff").C(name)
 
-  pageRequestChannel := make(chan *PageRequest, 10)
+    teamChannel := make(chan []Team)
+    // awardChannel := make(chan []Award)  
+    pageRequestChannel := make(chan *PageRequest)
 
-  for _, country := range countries {
-    go getNumberOfPages(country, pageRequestChannel)
-  }
-  
-  for i := len(countries); i > 0; i-- {
-    pageReq := <-pageRequestChannel
-    if err := pageReq.err; err != nil {
-      fmt.Println("Error!")
-      fmt.Println(err)
-      continue
+    teamCount := 0
+
+    countries, err := getCountries()
+    if err != nil {
+      return
     }
-    for i := 0; i <= pageReq.numPages; i++ {
-      url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/teams?page=%d&ProgramCode=FRC&Season=2013&Country=%s&sort=asc&order=Team%%20Number", i, pageReq.country)
-      go getTeams(url, teamChannel)
-      n1++
-    }
-  }
 
-  wltChannel := make(chan WLT, 10)
-  n2 := 0
-  // urlArray := make(map[string] string)
-  for i := n1; i > 0; i-- {
-    fmt.Println(i)
-    tt := <-teamChannel
-    for _, team := range tt {
-      go getOverallWLT(team.teamNumber, wltChannel)
-      n2++
+    for _, country := range countries {
+      go getNumberOfPages(country, year, pageRequestChannel)
     }
-  }
-  for i := n2; i > 0; i-- {
-    fmt.Println(<-wltChannel)
+    
+    for i := len(countries); i > 0; i-- {
+      pageReq := <-pageRequestChannel
+      if pageReq.err != nil {
+        fmt.Println("Error!")
+        fmt.Println(err)
+        continue
+
+      }
+      for i := 0; i <= pageReq.numPages; i++ {
+        url := fmt.Sprintf("http://www.usfirst.org/whats-going-on/teams?page=%d&ProgramCode=FRC&Season=%s&Country=%s&sort=asc&order=Team%%20Number", i, year, pageReq.country)
+        go getTeams(url, teamChannel)
+        teamCount++
+      }
+    }
+
+    for i := teamCount; i > 0; i-- {
+      for _, team := range <-teamChannel {
+        err = collection.Insert(team)
+        if err != nil {
+          fmt.Printf("Can't insert document: %v\n", err)
+        } else {
+          fmt.Println("Inserted ", team.TeamNumber)
+        }
+      }
+    }
+
   }
 }
